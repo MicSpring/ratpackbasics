@@ -5,6 +5,8 @@ buildscript {
     }
     dependencies {
         classpath ("io.ratpack:ratpack-gradle:1.4.2")
+        classpath 'com.h2database:h2:1.4.192'
+        classpath 'org.jooq:jooq-codegen:3.8.5'
     }
 }
 
@@ -31,6 +33,18 @@ repositories {
 dependencies {
     compile 'org.codehaus.groovy:groovy-all:2.3.11'
     testCompile group: 'junit', name: 'junit', version: '4.11'
+    compile ratpack.dependency('hikari')
+    compile 'com.h2database:h2:1.4.192'
+    compile 'org.jooq:jooq-codegen:3.8.5'
+
+
+    compile(
+            'org.slf4j:slf4j-api:1.7.21',
+            'ch.qos.logback:logback-core:1.1.7',
+            'ch.qos.logback:logback-classic:1.1.7',
+            'ch.qos.logback:logback-access:1.1.7'
+    )
+
 }
 
 war {
@@ -58,5 +72,36 @@ test {
 
         // events org.gradle.api.tasks.testing.logging.TestLogEvent.STANDARD_OUT,
         //  org.gradle.api.tasks.testing.logging.TestLogEvent.STANDARD_ERROR,
+    }
+}
+
+import org.jooq.util.*
+import org.jooq.util.jaxb.*;
+
+task jooqCodegen {
+    doLast {
+        String initDDL = "$projectDir/src/main/resources/scripts/ddl.sql".replace('\\\\','/').replace('\\','/')
+        String initDML = "$projectDir/src/main/resources/scripts/dml.sql".replace('\\\\','/').replace('\\','/')
+        println "DDL location: $initDDL \n DML Location: $initDML"
+
+        Configuration configuration = new Configuration()
+                .withJdbc(
+                    new Jdbc()
+                    .withDriver("org.h2.Driver")
+                    .withUrl("jdbc:h2:mem:indb;INIT=RUNSCRIPT FROM '$initDDL'\\;RUNSCRIPT FROM '$initDML'")
+        )
+                .withGenerator(
+                    new org.jooq.util.jaxb.Generator().withDatabase(new org.jooq.util.jaxb.Database()
+                    .withName("org.jooq.util.h2.H2Database")
+                    .withIncludes(".*")
+                    .withExcludes("")
+                    .withInputSchema("PUBLIC")
+            )
+                .withTarget(new Target()
+                .withDirectory("$projectDir/src/main/java")
+                .withPackageName("jooq.autogen.db"))
+        )
+
+        GenerationTool.generate(configuration)
     }
 }
